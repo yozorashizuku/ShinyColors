@@ -1,13 +1,13 @@
 // ==UserScript==
 // @name         偶像大师ShinyColors汉化
 // @namespace    https://github.com/biuuu/ShinyColors
-// @version      0.5.2
+// @version      0.5.0
 // @description  提交翻译或问题请到 https://github.com/biuuu/ShinyColors
 // @icon         https://shinycolors.enza.fun/icon_192x192.png
 // @author       biuuu
 // @match        https://shinycolors.enza.fun/*
 // @run-at       document-start
-// @updateURL    https://www.shiny.fun/ShinyColors.user.js
+// @updateURL    https://biuuu.github.io/ShinyColors/ShinyColors.user.js
 // @supportURL   https://github.com/biuuu/ShinyColors/issues
 // ==/UserScript==
 (function () {
@@ -405,11 +405,11 @@
 
 	var isPlainObject_1 = isPlainObject;
 
-	var version = "0.5.2";
+	var version = "0.5.0";
 
 	const PREVIEW_COUNT = 5;
 	const config = {
-	  origin: 'https://www.shiny.fun',
+	  origin: 'https://biuuu.github.io/ShinyColors',
 	  hash: '',
 	  localHash: '',
 	  version: version,
@@ -610,13 +610,13 @@
 	  } = await getHash;
 
 	  try {
-	    const str = localStorage.getItem('sczh:data');
+	    const str = sessionStorage.getItem('sczh:data');
 	    if (!str) return false;
 	    data = JSON.parse(str);
 
 	    if (data.hash !== hash) {
 	      data = null;
-	      localStorage.removeItem('sczh:data');
+	      sessionStorage.removeItem('sczh:data');
 	      localStorage.removeItem('sczh:data');
 	      return false;
 	    }
@@ -638,7 +638,7 @@
 	  const str = JSON.stringify(data);
 
 	  try {
-	    localStorage.setItem('sczh:data', str);
+	    sessionStorage.setItem('sczh:data', str);
 	  } catch (err) {
 	    console.log(err);
 	  }
