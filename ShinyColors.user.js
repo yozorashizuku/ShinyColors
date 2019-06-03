@@ -1,13 +1,13 @@
 // ==UserScript==
 // @name         偶像大师ShinyColors汉化
 // @namespace    https://github.com/biuuu/ShinyColors
-// @version      0.5.0
+// @version      0.5.3
 // @description  提交翻译或问题请到 https://github.com/biuuu/ShinyColors
 // @icon         https://shinycolors.enza.fun/icon_192x192.png
 // @author       biuuu
 // @match        https://shinycolors.enza.fun/*
 // @run-at       document-start
-// @updateURL    https://biuuu.github.io/ShinyColors/ShinyColors.user.js
+// @updateURL    https://www.shiny.fun/ShinyColors.user.js
 // @supportURL   https://github.com/biuuu/ShinyColors/issues
 // ==/UserScript==
 (function () {
@@ -405,11 +405,11 @@
 
 	var isPlainObject_1 = isPlainObject;
 
-	var version = "0.5.0";
+	var version = "0.5.3";
 
 	const PREVIEW_COUNT = 5;
 	const config = {
-	  origin: 'https://biuuu.github.io/ShinyColors',
+	  origin: 'https://www.shiny.fun',
 	  hash: '',
 	  localHash: '',
 	  version: version,
@@ -435,10 +435,17 @@
 	  FONT.YUAN_TRANS = "".concat(fontList.includes(config.font1) ? 'sczh-' : '').concat(config.font1, ",").concat(FONT.YUAN_JA);
 	};
 
+	const fixDefault = data => {
+	  if (data.origin === 'https://biuuu.github.io/ShinyColors') {
+	    data.origin = defaultConfig.origin;
+	  }
+	};
+
 	const getLocalConfig = () => {
 	  const str = localStorage.getItem('sczh:setting');
 	  let setting = JSON.parse(str);
 	  if (!isPlainObject_1(setting)) setting = {};
+	  fixDefault(setting);
 	  const {
 	    origin
 	  } = setting;
@@ -465,7 +472,9 @@
 	const saveConfig = () => {
 	  const data = {};
 	  keys.forEach(key => {
-	    data[key] = config[key];
+	    if (config[key] !== defaultConfig[key]) {
+	      data[key] = config[key];
+	    }
 	  });
 	  setFont();
 	  localStorage.setItem('sczh:setting', JSON.stringify(data));
@@ -610,13 +619,13 @@
 	  } = await getHash;
 
 	  try {
-	    const str = sessionStorage.getItem('sczh:data');
+	    const str = localStorage.getItem('sczh:data');
 	    if (!str) return false;
 	    data = JSON.parse(str);
 
 	    if (data.hash !== hash) {
 	      data = null;
-	      sessionStorage.removeItem('sczh:data');
+	      localStorage.removeItem('sczh:data');
 	      localStorage.removeItem('sczh:data');
 	      return false;
 	    }
@@ -638,7 +647,7 @@
 	  const str = JSON.stringify(data);
 
 	  try {
-	    sessionStorage.setItem('sczh:data', str);
+	    localStorage.setItem('sczh:data', str);
 	  } catch (err) {
 	    console.log(err);
 	  }
