@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         偶像大师ShinyColors汉化
 // @namespace    https://github.com/biuuu/ShinyColors
-// @version      0.5.3
+// @version      0.5.4
 // @description  提交翻译或问题请到 https://github.com/biuuu/ShinyColors
 // @icon         https://shinycolors.enza.fun/icon_192x192.png
 // @author       biuuu
@@ -240,6 +240,10 @@
 	  return trim(str, full).replace(/\\r/g, '\r').replace(/\\n/g, '\n');
 	};
 
+	const pureRE = str => {
+	  return str.replace(/\?/g, '\\?').replace(/\./g, '\\.').replace(/\*/g, '\\*').replace(/\+/g, '\\+').replace(/\(/g, '\\(').replace(/\)/g, '\\)');
+	};
+
 	let _console;
 
 	if (ENVIRONMENT === 'development') {
@@ -405,7 +409,7 @@
 
 	var isPlainObject_1 = isPlainObject;
 
-	var version = "0.5.3";
+	var version = "0.5.4";
 
 	const PREVIEW_COUNT = 5;
 	const config = {
@@ -921,53 +925,83 @@
 	  });
 	}
 
-	const numRE = '(\\d{1,10}\\.?\\d{0,4}?)';
-	const percentRE = '(\\d{1,10}\\.?\\d{0,4}?[%％])';
-
-	const parseRegExp = (str, nounRE) => {
-	  return str.replace(/\(/g, '\\(').replace(/\$num/g, numRE).replace(/\$percent/g, percentRE).replace(/\$noun/g, nounRE);
-	};
-
 	const autoTransCache = new Map();
 
-	const replaceText = (text, {
-	  skillMap,
-	  nounMap,
-	  nounRE
-	}) => {
+	const replaceText = (text, expMap, wordMaps) => {
 	  if (autoTransCache.has(text)) return autoTransCache.get(text);
 	  let result = text;
 
-	  for (let [key, trans] of skillMap) {
-	    const re = new RegExp(parseRegExp(key, nounRE), 'gi');
+	  for (let [re, trans] of expMap) {
 	    result = result.replace(re, (...arr) => {
 	      let _trans = trans;
 
 	      for (let i = 1; i < arr.length - 2; i++) {
-	        let eleKey = arr[i].toLowerCase();
+	        let eleKey = arr[i];
+	        let replaced = false;
+	        wordMaps.forEach(map => {
+	          if (map.has(eleKey)) {
+	            _trans = _trans.replace("$".concat(i), map.get(eleKey));
+	            replaced = true;
+	          }
+	        });
 
-	        if (nounMap.has(eleKey)) {
-	          _trans = _trans.replace("$".concat(i), nounMap.get(eleKey));
-	        } else {
+	        if (!replaced) {
 	          _trans = _trans.replace("$".concat(i), arr[i]);
 	        }
 	      }
 
 	      return _trans;
 	    });
+	    re.lastIndex = 0;
 	  }
 
 	  autoTransCache.set(text, result);
 	  return result;
 	};
 
-	const supportSkillMap = new Map();
+	const sortWords = (list, key = 'EMPTY') => {
+	  return list.sort((prev, next) => {
+	    let valPrev = prev;
+	    let valNext = next;
+
+	    if (key !== 'EMPTY') {
+	      valPrev = prev[key];
+	      valNext = next[key];
+	    }
+
+	    if (!valNext) valNext = '';
+	    if (!valPrev) valPrev = '';
+
+	    if (valNext.length > valPrev.length) {
+	      return 1;
+	    } else if (valPrev.length > valNext.length) {
+	      return -1;
+	    } else {
+	      return 0;
+	    }
+	  });
+	};
+
+	const numRE = '(\\d{1,10}\\.?\\d{0,4}?)';
+	const percentRE = '(\\d{1,10}\\.?\\d{0,4}?[%％])';
+	const unknownRE = '(.+?)';
+
+	const parseRegExp = (str, list) => {
+	  let result = str.replace(/\$num/g, numRE).replace(/\$percent/g, percentRE).replace(/\$unknown/g, unknownRE);
+	  list.forEach(item => {
+	    result = result.replace(item.re, item.exp);
+	    item.re.lastIndex = 0;
+	  });
+	  return new RegExp(result, 'gi');
+	};
+
+	const expMap = new Map();
 	const nounMap = new Map();
 	const nounArr = [];
-	let supportLoaded = false;
+	let loaded$4 = false;
 
 	const getSupportSkill = async () => {
-	  if (!supportLoaded) {
+	  if (!loaded$4) {
 	    let csv = await getLocalData('support-skill');
 
 	    if (!csv) {
@@ -976,102 +1010,167 @@
 	    }
 
 	    const list = parseCsv(csv);
-	    list.forEach(item => {
+	    const reMap = new Map();
+	    sortWords(list, 'text').forEach(item => {
 	      if (item && item.text) {
-	        const text = trim(item.text);
-	        const trans = trim(item.trans);
-	        const type = trim(item.type);
+	        const text = trim(item.text, true);
+	        const trans = trimWrap(item.trans);
+	        const type = trim(item.type, true);
 
 	        if (text && trans) {
 	          if (type === 'noun') {
-	            nounArr.push(text);
+	            nounArr.push(pureRE(text));
 	            nounMap.set(text, trans);
 	          } else {
-	            supportSkillMap.set(text, trans);
+	            reMap.set(text, trans);
 	          }
 	        }
 	      }
 	    });
-	    supportLoaded = true;
+	    const expList = [{
+	      re: /\$noun/g,
+	      exp: "(".concat(nounArr.join('|'), ")")
+	    }];
+
+	    for (let [key, value] of reMap) {
+	      const re = parseRegExp(key, expList);
+	      expMap.set(re, value);
+	    }
+
+	    loaded$4 = true;
 	  }
 
-	  const nounRE = "(".concat(nounArr.join('|'), ")");
 	  return {
-	    skillMap: supportSkillMap,
-	    nounMap,
-	    nounRE
+	    expMap,
+	    wordMaps: [nounMap]
 	  };
 	};
 
 	const transSkill = async data => {
-	  const supportSkillData = await getSupportSkill();
+	  const {
+	    expMap,
+	    wordMaps
+	  } = await getSupportSkill();
 	  const sskill = data.supportSkills;
 	  const asskill = data.acquiredSupportSkills;
 	  sskill.forEach(item => {
-	    item.description = tagText(replaceText(item.description, supportSkillData));
+	    item.description = tagText(replaceText(item.description, expMap, wordMaps));
 	  });
 	  asskill && asskill.forEach(item => {
-	    item.description = tagText(replaceText(item.description, supportSkillData));
+	    item.description = tagText(replaceText(item.description, expMap, wordMaps));
 	  });
 	};
 
-	const missionMap = new Map();
-	let loaded$4 = false;
+	const textMap = new Map();
+	const expMap$1 = new Map();
+	const nounMap$1 = new Map();
+	const nameMap = new Map();
+	const noteMap = new Map();
+	let loaded$5 = false;
 
 	const getMission = async (full = false) => {
-	  if (!loaded$4) {
+	  if (!loaded$5) {
 	    let csv = await getLocalData('mission');
 
 	    if (!csv) {
-	      csv = await fetchWithHash('/data/mission.csv');
+	      csv = await fetchWithHash('/data/mission-re.csv');
 	      setLocalData('mission', csv);
 	    }
 
 	    const list = parseCsv(csv);
-	    list.forEach(item => {
-	      if (item && item.ja) {
-	        const ja = trimWrap(item.ja);
-	        const zh = trimWrap(item.zh);
+	    const nounArr = [];
+	    const nameArr = [];
+	    const noteArr = [];
+	    const reMap = new Map();
+	    sortWords(list, 'text').forEach(item => {
+	      if (item && item.text) {
+	        const text = trim(item.text, true);
+	        const trans = trimWrap(item.trans);
+	        const type = trim(item.type, true);
 
-	        if (ja && (zh || full)) {
-	          missionMap.set(ja, zh);
+	        if (text && trans) {
+	          if (type === 'noun') {
+	            nounArr.push(pureRE(text));
+	            nounMap$1.set(text, trans);
+	          } else if (type === 'note') {
+	            noteArr.push(pureRE(text));
+	            noteMap.set(text, trans);
+	            reMap.set("\u3010".concat(text, "\u3011"), "\u3010".concat(trans, "\u3011"));
+	          } else if (type === 'name') {
+	            nameArr.push(pureRE(text));
+	            nameMap.set(text, trans);
+	          } else if (type === 'text') {
+	            textMap.set(text, trans);
+	          } else {
+	            reMap.set(text, trans);
+	          }
 	        }
 	      }
 	    });
-	    loaded$4 = true;
+	    const expList = [{
+	      re: /\$name/g,
+	      exp: "(".concat(nameArr.join('|'), ")")
+	    }, {
+	      re: /\$noun/g,
+	      exp: "(".concat(nounArr.join('|'), ")")
+	    }, {
+	      re: /\$note/g,
+	      exp: "(".concat(noteArr.join('|'), ")")
+	    }];
+
+	    for (let [key, value] of reMap) {
+	      const re = parseRegExp(key, expList);
+	      expMap$1.set(re, value);
+	    }
+
+	    loaded$5 = true;
 	  }
 
-	  return missionMap;
+	  const wordMaps = [nounMap$1, noteMap, nameMap];
+	  return {
+	    expMap: expMap$1,
+	    wordMaps,
+	    textMap
+	  };
 	};
 
-	let missionMap$1 = null;
+	let missionData = null;
 
-	const replaceText$1 = (data, key) => {
-	  if (data[key] && missionMap$1.has(data[key])) {
-	    data[key] = tagText(missionMap$1.get(data[key]));
+	const replaceMission = (data, key) => {
+	  const {
+	    expMap,
+	    wordMaps,
+	    textMap
+	  } = missionData;
+	  const text = data[key];
+	  let _text = text;
+	  if (!text) return;
+
+	  if (textMap.has(text)) {
+	    data[key] = tagText(textMap.get(text));
+	  } else {
+	    _text = replaceText(text, expMap, wordMaps);
+
+	    if (text !== _text) {
+	      data[key] = tagText(_text);
+	    }
 	  }
 	};
 
 	const processMission = list => {
 	  list.forEach(item => {
-	    replaceText$1(item.mission, 'title');
-	    replaceText$1(item.mission, 'comment');
+	    replaceMission(item.mission, 'title');
+	    replaceMission(item.mission, 'comment');
 
 	    if (item.mission.missionReward.content) {
-	      replaceText$1(item.mission.missionReward.content, 'name');
-	      replaceText$1(item.mission.missionReward.content, 'comment');
+	      replaceMission(item.mission.missionReward.content, 'name');
+	      replaceMission(item.mission.missionReward.content, 'comment');
 	    }
 	  });
 	};
 
 	const transMission = async data => {
-	  // if (ENVIRONMENT === 'development') {
-	  //   missionMap = await getMission(true)
-	  //   collectMissions(data)
-	  //   log(unknownMissions.join(',\n'))
-	  //   return
-	  // }
-	  missionMap$1 = await getMission();
+	  missionData = await getMission();
 	  processMission(data.dailyUserMissions);
 	  processMission(data.weeklyUserMissions);
 	  data.eventUserMissions.forEach(item => {
@@ -1084,7 +1183,7 @@
 	};
 
 	const reportMission = async data => {
-	  missionMap$1 = await getMission();
+	  missionData = await getMission();
 	  processMission(data.reportUserMissions);
 	};
 
@@ -1344,10 +1443,10 @@
 	}
 
 	const imageMap = new Map();
-	let loaded$5 = false;
+	let loaded$6 = false;
 
 	const getImage = async () => {
-	  if (!loaded$5) {
+	  if (!loaded$6) {
 	    let csv = await getLocalData('image');
 
 	    if (!csv) {
@@ -1370,7 +1469,7 @@
 	        }
 	      }
 	    });
-	    loaded$5 = true;
+	    loaded$6 = true;
 	  }
 
 	  return imageMap;
@@ -3645,11 +3744,11 @@
 	  });
 	};
 
-	const nameMap = new Map();
-	let loaded$6 = false;
+	const nameMap$1 = new Map();
+	let loaded$7 = false;
 
 	const getName = async () => {
-	  if (!loaded$6) {
+	  if (!loaded$7) {
 	    let csv = await getLocalData('name');
 
 	    if (!csv) {
@@ -3663,36 +3762,13 @@
 	      const trans = trim(item.trans, true);
 
 	      if (name && trans) {
-	        nameMap.set(name, tagText(trans));
+	        nameMap$1.set(name, tagText(trans));
 	      }
 	    });
-	    loaded$6 = true;
+	    loaded$7 = true;
 	  }
 
-	  return nameMap;
-	};
-
-	const sortWords = (list, key = 'EMPTY') => {
-	  return list.sort((prev, next) => {
-	    let valPrev = prev;
-	    let valNext = next;
-
-	    if (key !== 'EMPTY') {
-	      valPrev = prev[key];
-	      valNext = next[key];
-	    }
-
-	    if (!valNext) valNext = '';
-	    if (!valPrev) valPrev = '';
-
-	    if (valNext.length > valPrev.length) {
-	      return 1;
-	    } else if (valPrev.length > valNext.length) {
-	      return -1;
-	    } else {
-	      return 0;
-	    }
-	  });
+	  return nameMap$1;
 	};
 
 	const nounFixMap = new Map();
